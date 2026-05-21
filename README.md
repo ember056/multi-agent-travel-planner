@@ -1,113 +1,124 @@
-# 多Agent智能旅游行程规划系统
+# Multi-Agent Travel Planner 多 Agent 智能行程规划系统
 
-> **从零到面试** —— 企业级多Agent系统，Python + Java + Go 三语言实现，含八股文、STAR法则、面试QA全套资料。
+> 基于多 Agent 协作的智能旅行规划系统，支持用户偏好解析、目的地推荐、航班/酒店/活动并行搜索、预算校验与自动调整。
 
----
+本项目围绕自由行规划中信息分散、组合决策复杂、预算约束难控制的问题，设计了一套多 Agent 协作流程。用户输入预算、出发城市、旅行日期、人数和旅行风格后，系统会自动生成目的地推荐、航班方案、酒店方案、每日活动安排和预算明细。
 
-## 这个项目是什么？
+项目提供 Python、Java、Go 三种实现，其中 Python 版本用于快速验证 Agent 编排逻辑，Java 和 Go 版本用于对比不同后端技术栈下的并行编排实现方式。
 
-这是一个 **6个AI Agent协作** 的智能旅游行程规划系统。你输入预算、出发城市、日期、旅行风格，系统自动帮你规划完整行程——包括目的地推荐、航班比价、酒店匹配、每日活动安排，并且自动控制预算。
+## 项目背景
 
-**核心亮点**:
-- 6个Agent各司其职，通过 Pipeline + 并行 + 预算循环 协作
-- 航班/酒店/活动 **三Agent并行搜索**，延迟降低67%
-- 超预算自动触发 **渐进式降级循环**（最多3轮调整）
-- **Python + Java + Go** 三语言完整实现
-- 配套 **面试全套资料**（八股文 + STAR法则 + 面试QA + 架构讲解）
+传统旅行规划通常需要用户在多个平台之间反复切换：
 
----
+- 在目的地攻略中筛选适合季节和预算的城市；
+- 在航班、酒店、活动平台之间手动比价；
+- 需要不断计算总预算，发现超预算后再手动降级；
+- 多人出行时还需要考虑旅行风格、活动偏好和行程节奏。
 
-## 目录导航
+本项目将旅行规划拆解为多个相对独立的子任务，并交给不同 Agent 处理。编排层负责串联 Agent、并行执行搜索任务，并在预算超出时触发自动调整。
 
-| 内容 | 链接 | 说明 |
-|------|------|------|
-| **Python 实现** | [python/](python/) | 主力版本，FastAPI + Streamlit |
-| **Java 实现** | [java/](java/) | Spring Boot 3.3 版本 |
-| **Go 实现** | [golang/](golang/) | Gin + goroutine 版本 |
-| **八股文** | [docs/01-八股文.md](docs/01-八股文.md) | 15个核心知识点 |
-| **简历模板** | [docs/02-简历模板.md](docs/02-简历模板.md) | STAR法则 + 3种岗位模板 |
-| **面试QA** | [docs/03-面试QA.md](docs/03-面试QA.md) | 34道常见面试题 |
-| **架构设计** | [docs/04-架构设计详解.md](docs/04-架构设计详解.md) | 架构图 + 设计决策 |
-| **代码讲解** | [docs/05-代码讲解.md](docs/05-代码讲解.md) | 逐模块代码详解 |
+## 核心能力
 
----
+- **偏好解析**：解析预算、出发城市、旅行时间、人数、旅行风格和兴趣偏好。
+- **目的地推荐**：根据季节、预算、旅行风格和目的地特征推荐候选城市。
+- **并行资源搜索**：航班、酒店和活动三个 Agent 并行执行，降低端到端规划延迟。
+- **预算控制**：Budget Agent 汇总费用并判断是否超预算。
+- **渐进式调整**：当总费用超出预算时，自动降低酒店、航班或活动档位，并最多执行多轮调整。
+- **多语言实现**：提供 Python、Java、Go 三种实现，便于对比不同语言的并发模型和工程组织方式。
+- **API 与前端**：Python 版本提供 FastAPI 接口和 Streamlit 页面，便于本地演示。
+
+## Agent 设计
+
+| Agent | 职责 | 输入 | 输出 |
+| --- | --- | --- | --- |
+| Preference Agent | 补全并标准化用户偏好 | 原始用户请求 | 结构化偏好 |
+| Destination Agent | 推荐候选目的地 | 用户偏好 | 目的地列表与推荐理由 |
+| Flight Agent | 搜索并选择航班 | 出发地、目的地、日期 | 航班方案 |
+| Hotel Agent | 匹配住宿方案 | 目的地、日期、风格、人数 | 酒店方案 |
+| Activity Agent | 生成每日活动安排 | 目的地、天数、兴趣偏好 | 日程安排 |
+| Budget Agent | 预算校验与调整建议 | 航班、酒店、活动费用 | 预算明细与调整建议 |
 
 ## 系统架构
 
-```
-用户输入
+```text
+用户请求
   │
   ▼
-┌────────────────┐
-│ Preference     │  收集用户偏好（预算/风格/时间/禁忌）
-│ Agent          │
-└───────┬────────┘
-        │
-        ▼
-┌────────────────┐
-│ Destination    │  推荐目的地（季节/签证/安全/性价比评分）
-│ Agent          │
-└───────┬────────┘
-        │
-        ├──────────────────┬──────────────────┐
-        ▼                  ▼                  ▼
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│ Flight Agent │  │ Hotel Agent  │  │ Activity     │  ← 三个Agent并行执行
-│ (航班搜索)    │  │ (酒店搜索)    │  │ Agent(活动)  │
-└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-       │                 │                 │
-       └─────────────────┼─────────────────┘
-                         │
-                         ▼
-               ┌────────────────┐
-               │ Budget Agent   │  预算校验
-               └───────┬────────┘
-                       │
-                ┌──────┴──────┐
-                │             │
-             通过？         超预算？
-                │             │
-                ▼             ▼
-            输出行程     调整方案 → 回到并行搜索
-                        (最多3轮)
+Preference Agent
+  │
+  ▼
+Destination Agent
+  │
+  ├───────────────┬───────────────┐
+  ▼               ▼               ▼
+Flight Agent   Hotel Agent    Activity Agent
+  │               │               │
+  └───────────────┴───────────────┘
+                  │
+                  ▼
+            Budget Agent
+                  │
+          ┌───────┴────────┐
+          ▼                ▼
+      预算通过          超出预算
+          │                │
+          ▼                ▼
+      输出行程       降级策略并重新规划
 ```
 
-**编排模式**: Pipeline（串行）+ 并行（asyncio.gather）+ 预算循环（while loop）
+编排策略：
 
----
+- **Pipeline**：偏好解析、目的地推荐、预算校验等步骤按顺序执行。
+- **Parallel**：航班、酒店、活动搜索互不依赖，使用并行方式执行。
+- **Budget Loop**：预算超出时触发调整循环，避免一次性生成不可用方案。
 
-## 快速开始（5分钟上手）
+## 技术栈
 
-### 前置条件
+| 版本 | 技术栈 | 说明 |
+| --- | --- | --- |
+| Python | FastAPI、Streamlit、Pydantic、asyncio、pytest | 主力演示版本，适合快速验证 Agent 编排 |
+| Java | Spring Boot、CompletableFuture、Maven | 后端服务版本，适合 Java 工程化表达 |
+| Go | Gin、goroutine、WaitGroup | 并发模型清晰，适合轻量服务实现 |
 
-- Python 3.10+（运行 Python 版本）
-- Java 21+（运行 Java 版本，可选）
-- Go 1.22+（运行 Go 版本，可选）
+## 项目结构
 
-### Python 版本（推荐先跑这个）
+```text
+multi-agent-travel-planner/
+├── docs/                         # 架构、代码与面试整理文档
+├── python/                       # Python 实现
+│   ├── agents/                   # 6 个 Agent
+│   ├── orchestrator/             # Pipeline、并行执行、预算循环
+│   ├── tools/                    # 航班/酒店/活动等模拟搜索工具
+│   ├── api/                      # FastAPI 接口
+│   ├── ui/                       # Streamlit 前端
+│   └── tests/                    # 单元测试
+├── java/                         # Java Spring Boot 实现
+├── golang/                       # Go Gin 实现
+├── plan.md                       # 规划与实现记录
+└── README.md
+```
+
+## 快速启动
+
+### Python 版本
 
 ```bash
-# 1. 克隆项目
-git clone https://github.com/bcefghj/multi-agent-travel-planner.git
-cd multi-agent-travel-planner
-
-# 2. 安装依赖
 cd python
 pip install -r requirements.txt
 
-# 3. 运行 CLI 演示（不需要任何 API Key！）
+# CLI 演示
 python main.py
 
-# 4. 自定义参数
+# 自定义参数
 python main.py --budget 15000 --departure 上海 --start 2026-06-01 --end 2026-06-07 --style luxury --travelers 2
 
-# 5. 启动 API 服务
+# 启动 API 服务
 python -m api.app
 
-# 6. 启动 Streamlit 前端
+# 启动 Streamlit 前端
 streamlit run ui/streamlit_app.py
 
-# 7. 运行测试
+# 运行测试
 python -m pytest tests/ -v
 ```
 
@@ -115,12 +126,12 @@ python -m pytest tests/ -v
 
 ```bash
 cd java
-# 如果有 Maven Wrapper
-./mvnw spring-boot:run
-# 或者用系统 Maven
 mvn spring-boot:run
+```
 
-# 测试 API
+测试接口：
+
+```bash
 curl -X POST http://localhost:8080/api/plan \
   -H "Content-Type: application/json" \
   -d '{"budget": 10000, "departureCity": "北京", "startDate": "2026-05-01", "endDate": "2026-05-05"}'
@@ -132,185 +143,22 @@ curl -X POST http://localhost:8080/api/plan \
 cd golang
 go mod tidy
 go run ./cmd/server
+```
 
-# 测试 API
+测试接口：
+
+```bash
 curl -X POST http://localhost:8080/api/plan \
   -H "Content-Type: application/json" \
   -d '{"origin_city": "上海", "duration_days": 5, "budget_cny": 12000, "travel_style": "comfort"}'
 ```
 
----
-
-## 运行效果展示
-
-### CLI 输出示例
-
-```
-============================================================
-📋 行程规划结果
-============================================================
-
-🌍 目的地: 首尔, 韩国
-   潮流时尚与历史文化交汇
-   亮点: 景福宫, 明洞, 北村韩屋村, 南山塔
-
-✈️  去程: 东方航空 MU1903 ¥1578
-✈️  返程: 南方航空 CZ6372 ¥1703
-
-🏨 酒店: 首尔精品设计酒店 (4.0星)
-   ¥395/晚 × 4 晚
-   设施: WiFi, 早餐, 酒吧
-
-📅 每日行程:
-
-  2026-05-01 (日花费: ¥730)
-    [morning  ] 博物馆参观 (3.0h) ¥80
-    [afternoon] 温泉/SPA体验 (2.0h) ¥350
-    [evening  ] 文化演出 (2.0h) ¥300
-
-  2026-05-02 (日花费: ¥530)
-    [morning  ] 博物馆参观 (3.0h) ¥80
-    [afternoon] 特色午餐 (1.5h) ¥150
-    [evening  ] 文化演出 (2.0h) ¥300
-
-💰 预算明细:
-   航班: ¥3281
-   酒店: ¥1580
-   活动: ¥2270
-   ─────────────
-   总计: ¥7131 / 预算: ¥10000
-   ✅ 预算内
-```
-
----
-
-## 项目结构
-
-```
-.
-├── README.md                    ← 你正在看的文件
-│
-├── docs/                        ← 面试准备资料（重点看！）
-│   ├── 01-八股文.md              ← 15个核心知识点
-│   ├── 02-简历模板.md            ← STAR法则 + 简历模板
-│   ├── 03-面试QA.md             ← 34道面试题 + 参考答案
-│   ├── 04-架构设计详解.md        ← 架构图 + 设计决策详解
-│   └── 05-代码讲解.md            ← 逐模块代码讲解
-│
-├── python/                      ← Python 实现（主力版本）
-│   ├── main.py                  ← CLI 入口
-│   ├── requirements.txt
-│   ├── config/settings.py       ← 配置管理
-│   ├── models/schemas.py        ← Pydantic 数据模型
-│   ├── agents/                  ← 6个 Agent
-│   │   ├── base_agent.py        ← Agent 基类（模板方法模式）
-│   │   ├── preference_agent.py  ← 偏好收集
-│   │   ├── destination_agent.py ← 目的地推荐
-│   │   ├── flight_agent.py      ← 航班搜索
-│   │   ├── hotel_agent.py       ← 酒店搜索
-│   │   ├── activity_agent.py    ← 活动推荐
-│   │   └── budget_agent.py      ← 预算校验
-│   ├── orchestrator/            ← 编排层
-│   │   ├── pipeline.py          ← Pipeline 编排器
-│   │   ├── parallel.py          ← 并行执行器
-│   │   └── budget_loop.py       ← 预算循环控制
-│   ├── tools/                   ← Mock 搜索工具
-│   ├── api/app.py               ← FastAPI 后端
-│   ├── ui/streamlit_app.py      ← Streamlit 前端
-│   └── tests/test_agents.py     ← 10个单元测试
-│
-├── java/                        ← Java Spring Boot 实现
-│   ├── pom.xml
-│   ├── README.md
-│   └── src/main/java/com/travel/
-│       ├── agent/               ← 6个 Agent
-│       ├── orchestrator/        ← CompletableFuture 并行
-│       ├── model/               ← 数据模型
-│       ├── controller/          ← REST API
-│       └── service/             ← 业务服务
-│
-└── golang/                      ← Go 实现
-    ├── go.mod
-    ├── README.md
-    ├── cmd/server/main.go       ← 入口
-    ├── internal/
-    │   ├── agent/               ← 6个 Agent
-    │   ├── orchestrator/        ← goroutine 并行
-    │   ├── model/               ← 数据结构
-    │   └── handler/             ← HTTP 处理器
-    └── pkg/llm/                 ← LLM 客户端
-```
-
----
-
-## 6个Agent详解
-
-| # | Agent | 职责 | 输入 | 输出 | 面试重点 |
-|---|-------|------|------|------|---------|
-| 1 | **Preference** | 收集/补充用户偏好 | UserPreferences | enriched UserPreferences | 为什么需要单独的偏好Agent？ |
-| 2 | **Destination** | 推荐目的地 | UserPreferences | Top3 城市 + 推荐理由 | 多维度评分算法设计 |
-| 3 | **Flight** | 航班搜索比价 | 出发城市+目的地+日期 | 航班列表 + 推荐航班 | 并行执行、评分函数 |
-| 4 | **Hotel** | 酒店匹配 | 目的地+入住日期+风格 | 酒店列表 + 推荐酒店 | 风格匹配、房间数计算 |
-| 5 | **Activity** | 生成每日行程 | 目的地+天数+兴趣 | 每日活动计划 | 时间槽分配算法 |
-| 6 | **Budget** | 预算校验与调整 | 所有费用汇总 | 预算明细 + 调整建议 | **渐进式降级循环** |
-
----
-
-## 面试准备路线图
-
-如果你正在准备面试，建议按以下顺序学习：
-
-### 第一步：理解架构（1天）
-
-1. 阅读 [架构设计详解](docs/04-架构设计详解.md)
-2. 运行 Python 版本，观察日志输出
-3. 画出架构图，能口述整个流程
-
-### 第二步：读懂代码（1-2天）
-
-1. 阅读 [代码讲解](docs/05-代码讲解.md)
-2. 从 `main.py` 开始，F12 跳转阅读每个模块
-3. 重点理解：并行执行器 + 预算循环
-
-### 第三步：背八股文（2-3天）
-
-1. 阅读 [八股文](docs/01-八股文.md) 全部15个知识点
-2. 重点掌握：Agent vs Workflow、Pipeline vs DAG、LangGraph vs CrewAI
-3. 能用自己的话解释每个概念
-
-### 第四步：准备面试（1-2天）
-
-1. 阅读 [面试QA](docs/03-面试QA.md) 全部34道题
-2. 用 [STAR法则](docs/02-简历模板.md) 写好简历
-3. 对着镜子练习口述项目（控制在3分钟内）
-
-### 第五步：扩展加分（可选）
-
-1. 把 Mock 替换为真实 API（如 MiniMax M2.7）
-2. 添加新的 Agent（如 WeatherAgent）
-3. 接入 Langfuse 实现可观测性
-
----
-
-## 技术栈对比
-
-| 维度 | Python | Java | Go |
-|------|--------|------|----|
-| **框架** | FastAPI + asyncio | Spring Boot 3.3 | Gin |
-| **并行** | asyncio.gather | CompletableFuture.allOf | goroutine + WaitGroup |
-| **数据模型** | Pydantic v2 | Record / POJO | Struct |
-| **状态安全** | 不同字段无冲突 | synchronized | sync.Mutex |
-| **测试** | pytest | JUnit 5 | go test |
-| **部署** | uvicorn | JAR | 单二进制 |
-| **适合岗位** | AI工程师 | Java后端 | Go后端 |
-
----
-
-## API 接口文档
+## API 示例
 
 ### POST /api/plan
 
-**请求**:
+请求示例：
+
 ```json
 {
   "budget": 10000,
@@ -324,7 +172,8 @@ curl -X POST http://localhost:8080/api/plan \
 }
 ```
 
-**响应**:
+响应示例：
+
 ```json
 {
   "destination": "首尔",
@@ -342,66 +191,56 @@ curl -X POST http://localhost:8080/api/plan \
 }
 ```
 
-### GET /api/health
+## 运行说明
 
-```json
-{"status": "ok", "service": "travel-planner", "agents": 6}
-```
+默认实现使用 Mock 数据，不依赖真实航班、酒店或地图平台 API，因此可以本地直接运行和测试。Mock 数据主要用于验证多 Agent 编排、预算控制和接口结构。
 
----
+如果需要接入真实服务，可以在 `tools/` 层替换数据来源，例如：
 
-## 常见问题
+- 航班搜索 API；
+- 酒店搜索 API；
+- 地图/地点推荐 API；
+- 天气查询 API；
+- 大模型服务 API。
 
-### Q: 需要 API Key 吗？
+## 设计亮点
 
-**不需要！** 系统默认使用 Mock 模式，所有数据都是模拟生成的，可以零成本完整运行。
-如果你想接入真实 LLM，设置环境变量即可：
+### 1. 任务拆分清晰
 
-```bash
-export LLM_PROVIDER=minimax
-export LLM_API_KEY=your-api-key
-```
+将复杂旅行规划拆成偏好、目的地、航班、酒店、活动和预算六个子任务，每个 Agent 只关注单一职责，降低模块耦合。
 
-### Q: 数据是真实的吗？
+### 2. 并行搜索降低延迟
 
-Mock 模式下的航班/酒店/活动数据是模拟的，但数据结构和业务逻辑与真实场景一致。
-在面试中可以说："系统架构支持接入真实 API（Amadeus/Booking/Google Places），
-当前使用 Mock 数据方便演示和测试。"
+航班、酒店和活动搜索相互独立，因此编排层使用并行执行方式聚合结果。Python 版本使用 `asyncio.gather`，Java 版本使用 `CompletableFuture`，Go 版本使用 `goroutine + WaitGroup`。
 
-### Q: 这个项目能直接写进简历吗？
+### 3. 预算循环提高方案可用性
 
-当然可以！详见 [简历模板](docs/02-简历模板.md)。建议根据自己应聘的岗位选择合适的模板。
+行程规划不是一次性生成文本，而是要满足预算约束。系统在预算超出时触发降级策略，例如降低酒店档位、缩减高价活动或调整航班选择，直到预算满足或达到最大调整轮数。
 
-### Q: 三种语言都要学吗？
+### 4. 多语言实现便于工程对比
 
-不需要。选择你面试使用的语言深入学习即可：
-- 面 AI 工程师 → 重点 Python
-- 面 Java 后端 → 重点 Java
-- 面 Go 后端 → 重点 Go
+同一套业务流程分别用 Python、Java 和 Go 实现，可以对比不同语言在数据建模、并行编排、接口设计和测试组织上的差异。
 
----
+## 面试说明
 
-## 参考的企业级项目
+如果被问到项目数据是否真实，可以这样回答：
 
-本项目的架构设计参考了以下优秀开源项目：
+> 当前项目默认使用 Mock 数据，主要用于验证多 Agent 编排、并行搜索和预算控制逻辑。实际落地时，航班、酒店、活动和天气都可以通过工具层替换为真实 API，核心编排流程不需要大改。
 
-| 项目 | 框架 | 特点 |
-|------|------|------|
-| [Y-66/Traveler](https://github.com/Y-66/Traveler) | Agno | MCP + RAG + Memory，最完整 |
-| [agno-langfuse-travel-planner](https://github.com/mcikalmerdeka/agno-langfuse-travel-planner) | Agno + Langfuse | 可观测性标杆 |
-| [langgraph_travel_planner](https://github.com/sergio11/langgraph_travel_planner_assistant) | LangGraph | Supervisor 架构 |
-| [Ninja-Navigator-AI](https://github.com/happyrao78/Ninja-Navigator-AI) | LangChain | FastAPI + Streamlit |
-| [tripsage-ai](https://github.com/BjornMelin/tripsage-ai) | LangGraph | 70% 复杂度降低案例 |
+如果被问到为什么拆成多个 Agent，可以这样回答：
 
----
+> 旅行规划包含偏好理解、目的地推荐、航班搜索、酒店匹配、活动安排和预算控制等异构任务。拆成多个 Agent 后，每个模块职责清晰，也方便并行执行和单独替换工具实现。
 
-## 学术参考
+如果被问到项目目前的重点，可以这样回答：
 
-- [HiMAP-Travel](https://arxiv.org/html/2603.04750v1) - 分层多Agent旅行规划，52.78% 验证通过率
-- [ATLAS](https://arxiv.org/html/2509.25586v1) - 约束感知多Agent协作，84% 最终通过率
+> 这个项目的重点不是调用某一个真实旅游 API，而是验证多 Agent 工作流如何把复杂任务拆解、并行执行，并通过预算循环保证最终方案满足约束。
 
----
+## 注意事项
+
+- 不要提交真实 API Key 或个人旅行数据。
+- 当前默认使用 Mock 数据，适合本地演示和测试。
+- `docs/` 目录包含架构、代码讲解和项目复盘材料，可作为理解项目的辅助资料。
 
 ## License
 
-MIT License - 自由使用、修改、分发。
+MIT
